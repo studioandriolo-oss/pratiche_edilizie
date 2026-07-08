@@ -2,10 +2,14 @@ import streamlit as st
 import docx
 from io import BytesIO
 
+# Configurazione pagina
 st.set_page_config(page_title="Motore LLM - Pratiche Edilizie", layout="wide")
 st.title("Generatore Documenti Pratiche Edilizie")
 
-# Inizializzazione Session State con liste di ID univoci
+# ==========================================
+# GESTIONE STATO (SESSION STATE)
+# ==========================================
+# Inizializzazione liste di ID univoci per gestire aggiunte e rimozioni
 if 'intestatari_ids' not in st.session_state:
     st.session_state.intestatari_ids = [0] # Il primo intestatario (ID 0) c'è sempre
 if 'professionisti_ids' not in st.session_state:
@@ -27,6 +31,7 @@ def add_professionista():
 
 def remove_professionista(id_to_remove):
     st.session_state.professionisti_ids.remove(id_to_remove)
+
 
 # ==========================================
 # SEZIONE 1: RACCOGLITORE DI DATI
@@ -63,8 +68,17 @@ for idx, uid in enumerate(st.session_state.intestatari_ids):
     if idx > 0:
         st.button("🗑️ Rimuovi questo intestatario", key=f"del_int_{uid}", on_click=remove_intestatario, args=(uid,))
     
+    # Salvataggio dati per il Word
     intestatari_data.append({
-        "Nome": nome, "Cognome": cognome, "CF": cf, "Diritto": titolo, #... ecc
+        "Nome": nome, 
+        "Cognome": cognome, 
+        "CF": cf, 
+        "Data Nascita": data_nascita.strftime('%d/%m/%Y') if data_nascita else "", 
+        "Luogo Nascita": luogo_nascita,
+        "Residenza": f"{via} {civico}, {cap} {paese} ({prov})",
+        "Mail": mail, 
+        "Tel": tel, 
+        "Diritto": titolo
     })
     st.divider()
 
@@ -73,7 +87,7 @@ st.button("➕ Aggiungi un altro intestatario", on_click=add_intestatario)
 # --- PROFESSIONISTI ---
 st.subheader("Professionisti")
 
-# Funzione per renderizzare il form del professionista (evitiamo di duplicare codice)
+# Funzione per renderizzare il form del professionista
 def render_professionista(uid, is_main=False):
     if is_main:
         qualifica = "Progettista"
@@ -83,14 +97,15 @@ def render_professionista(uid, is_main=False):
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        titolo = st.selectbox("Titolo", ["Architetto", "Ingegnere", "Geometra", "Perito", "Altro"], key=f"prof_tit_{uid}")
+        tit_opzioni = ["Architetto", "Ingegnere", "Geometra", "Perito", "Altro"]
+        titolo = st.selectbox("Titolo", tit_opzioni, index=0, key=f"prof_tit_{uid}")
         nome = st.text_input("Nome", value="Gianfranco" if is_main else "", key=f"prof_nome_{uid}")
         cognome = st.text_input("Cognome", value="Andriolo" if is_main else "", key=f"prof_cogn_{uid}")
         cf = st.text_input("Codice Fiscale", value="NDRGFR83S17F964E" if is_main else "", key=f"prof_cf_{uid}")
     with col2:
         luogo_nascita = st.text_input("Luogo di Nascita", value="Noventa Vicentina" if is_main else "", key=f"prof_luogo_{uid}")
         data_nascita = st.text_input("Data di Nascita (gg/mm/aaaa)", value="17/11/1983" if is_main else "", key=f"prof_data_{uid}")
-        studio = st.text_input("Studio in (Indirizzo completo)", value="Via Masotto 11, 36025 Noventa Vicentina" if is_main else "", key=f"prof_studio_{uid}")
+        studio = st.text_input("Studio in (Indirizzo)", value="Via Masotto 11, 36025 Noventa Vicentina" if is_main else "", key=f"prof_studio_{uid}")
     with col3:
         pec = st.text_input("PEC", value="andriolo.18135@oamilano.it" if is_main else "", key=f"prof_pec_{uid}")
         mail = st.text_input("Mail", value="studioandriolo@gmail.com" if is_main else "", key=f"prof_mail_{uid}")
@@ -102,7 +117,14 @@ def render_professionista(uid, is_main=False):
         st.button("🗑️ Rimuovi professionista", key=f"del_prof_{uid}", on_click=remove_professionista, args=(uid,))
     
     st.divider()
-    return {"Qualifica": qualifica, "Nome": f"{titolo} {nome} {cognome}", "CF": cf} # Ritorna il dizionario coi dati
+    
+    # Ritorna il dizionario completo per il Word
+    return {
+        "Qualifica": qualifica, 
+        "Nome": f"{titolo} {nome} {cognome}", 
+        "CF": cf,
+        "Dati": f"Nato a {luogo_nascita} il {data_nascita} | Studio: {studio} | PEC: {pec} | Mail: {mail} | Tel: {tel} | Albo: {albo_coll} n. {num_albo}"
+    }
 
 professionisti_data = []
 
@@ -117,12 +139,13 @@ for uid in st.session_state.professionisti_ids:
 
 st.button("➕ Aggiungi altro professionista", on_click=add_professionista)
 
+
 # ==========================================
 # SEZIONE 2: ELEMENTI COGNITIVI
 # ==========================================
 st.header("2. Elementi Cognitivi del Progetto")
 tipo_pratica = st.selectbox("Tipo di pratica edilizia", ["CILA", "SCIA art.22", "SCIA art.23", "PdC"])
-tipo_intervento = st.text_input("Tipo di intervento (scrivi una relazione sintetica)")
+tipo_intervento = st.text_input("Tipo di intervento (es. Manutenzione Straordinaria, Ristrutturazione)")
 rel_sintetica = st.text_area("Relazione Sintetica dell'intervento", height=150)
 elaborati = st.file_uploader("Elaborati grafici (Carica PDF)", type=['pdf'], accept_multiple_files=True)
 
@@ -134,7 +157,7 @@ st.header("3. Documenti da Redigere")
 st.caption("Seleziona i documenti necessari. Per ognuno, carica un documento di spunto e il template .docx da compilare.")
 
 docs_necessari = {
-    "Relazione tecnico-illustrativa": st.checkbox("Relazione tecnico-illustrativa", value=True), # Sempre spuntato
+    "Relazione tecnico-illustrativa": st.checkbox("Relazione tecnico-illustrativa", value=True),
     "Relazione paesaggistica": st.checkbox("Relazione paesaggistica"),
     "Relazione stato legittimo": st.checkbox("Relazione stato legittimo"),
     "Modello FCA (P/P/P/I/A)": st.checkbox("Modello FCA (P/P/P/I/A)"),
@@ -157,33 +180,35 @@ for doc_name, is_checked in docs_necessari.items():
 
 
 # ==========================================
-# LOGICA DI ESPORTAZIONE E GENERAZIONE
+# LOGICA DI ESPORTAZIONE
 # ==========================================
 st.divider()
 
-# 1. Generatore File Anagrafica (Copia-Incolla)
 def genera_docx_anagrafica():
     doc = docx.Document()
     doc.add_heading('Dati per Portale "Impresa in un giorno"', 0)
     
+    # Sezione Intestatari
     doc.add_heading('Intestatari', level=1)
     for idx, int_data in enumerate(intestatari_data):
         doc.add_heading(f'Soggetto {idx+1} - {int_data["Diritto"]}', level=2)
         for key, value in int_data.items():
             doc.add_paragraph(f"{key}: {value}", style='List Bullet')
             
+    # Sezione Professionisti
     doc.add_heading('Professionisti', level=1)
     for prof in professionisti_data:
         doc.add_heading(f'{prof["Qualifica"]}: {prof["Nome"]}', level=2)
         doc.add_paragraph(f"C.F.: {prof['CF']}", style='List Bullet')
         doc.add_paragraph(f"Dati aggiuntivi: {prof['Dati']}", style='List Bullet')
         
+    # Sezione Progetto
     doc.add_heading('Dati Progetto', level=1)
     doc.add_paragraph(f"Pratica: {tipo_pratica}", style='List Bullet')
     doc.add_paragraph(f"Intervento: {tipo_intervento}", style='List Bullet')
     doc.add_paragraph(f"Sintesi: {rel_sintetica}", style='List Bullet')
     
-    # Salva in RAM
+    # Salva in memoria
     io_stream = BytesIO()
     doc.save(io_stream)
     return io_stream.getvalue()
@@ -201,8 +226,4 @@ with col_btn1:
 
 with col_btn2:
     if st.button("🤖 Genera Relazioni con LLM"):
-        # Qui andrà la logica per chiamare OpenAI/Anthropic
-        # 1. Estrarre il testo dal file di "spunto" e dai dati della Sezione 1 e 2
-        # 2. Passare il contesto al LLM
-        # 3. Identificare i placeholder nel file "template .docx" e sostituirli con l'output generato
-        st.info("Logica LLM da implementare. Pronta la struttura di base!")
+        st.info("Logica LLM/Mail Merge da implementare in base alla strada che sceglieremo.")
