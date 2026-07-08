@@ -2,15 +2,31 @@ import streamlit as st
 import docx
 from io import BytesIO
 
-# Configurazione pagina
 st.set_page_config(page_title="Motore LLM - Pratiche Edilizie", layout="wide")
 st.title("Generatore Documenti Pratiche Edilizie")
 
-# Inizializzazione Session State per campi dinamici
-if 'num_intestatari' not in st.session_state:
-    st.session_state.num_intestatari = 1
-if 'num_professionisti_extra' not in st.session_state:
-    st.session_state.num_professionisti_extra = 0
+# Inizializzazione Session State con liste di ID univoci
+if 'intestatari_ids' not in st.session_state:
+    st.session_state.intestatari_ids = [0] # Il primo intestatario (ID 0) c'è sempre
+if 'professionisti_ids' not in st.session_state:
+    st.session_state.professionisti_ids = [] # Lista vuota in partenza per gli extra
+if 'counter' not in st.session_state:
+    st.session_state.counter = 1 # Contatore per generare ID sempre nuovi
+
+# Funzioni di utilità per aggiungere/rimuovere
+def add_intestatario():
+    st.session_state.intestatari_ids.append(st.session_state.counter)
+    st.session_state.counter += 1
+
+def remove_intestatario(id_to_remove):
+    st.session_state.intestatari_ids.remove(id_to_remove)
+
+def add_professionista():
+    st.session_state.professionisti_ids.append(st.session_state.counter)
+    st.session_state.counter += 1
+
+def remove_professionista(id_to_remove):
+    st.session_state.professionisti_ids.remove(id_to_remove)
 
 # ==========================================
 # SEZIONE 1: RACCOGLITORE DI DATI
@@ -20,76 +36,93 @@ st.header("1. Anagrafiche e Raccoglitore Dati")
 # --- INTESTATARI ---
 st.subheader("Intestatari")
 intestatari_data = []
-for i in range(st.session_state.num_intestatari):
-    st.markdown(f"**Soggetto {i+1}**")
+
+for idx, uid in enumerate(st.session_state.intestatari_ids):
+    st.markdown(f"**Intestatario {idx+1}**")
+    
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        nome = st.text_input(f"Nome", key=f"nome_{i}")
-        cognome = st.text_input(f"Cognome", key=f"cogn__{i}")
-        cf = st.text_input(f"Codice Fiscale", key=f"cf_{i}")
+        nome = st.text_input("Nome", key=f"int_nome_{uid}")
+        cognome = st.text_input("Cognome", key=f"int_cogn_{uid}")
+        cf = st.text_input("Codice Fiscale", key=f"int_cf_{uid}")
     with col2:
-        data_nascita = st.date_input(f"Data di Nascita", key=f"data_{i}")
-        luogo_nascita = st.text_input(f"Luogo di Nascita", key=f"luogo_{i}")
-        titolo = st.selectbox(f"Diritto", ["Proprietario", "Comproprietario", "Usufruttuario", "Rappresentante Legale"], key=f"tit_{i}")
+        data_nascita = st.date_input("Data di Nascita", key=f"int_data_{uid}")
+        luogo_nascita = st.text_input("Luogo di Nascita", key=f"int_luogo_{uid}")
+        titolo = st.selectbox("Diritto", ["Proprietario", "Comproprietario", "Usufruttuario", "Rappresentante Legale"], key=f"int_tit_{uid}")
     with col3:
-        via = st.text_input(f"Indirizzo di residenza (Via)", key=f"via_{i}")
-        civico = st.text_input(f"Civico", key=f"civ_{i}")
-        cap = st.text_input(f"CAP", key=f"cap_{i}")
+        via = st.text_input("Indirizzo di residenza (Via)", key=f"int_via_{uid}")
+        civico = st.text_input("Civico", key=f"int_civ_{uid}")
+        cap = st.text_input("CAP", key=f"int_cap_{uid}")
     with col4:
-        paese = st.text_input(f"Paese", key=f"paese_{i}")
-        prov = st.text_input(f"Provincia", key=f"prov_{i}")
-        mail = st.text_input(f"Mail", key=f"mail_{i}")
-        tel = st.text_input(f"Telefono", key=f"tel_{i}")
+        paese = st.text_input("Paese", key=f"int_paese_{uid}")
+        prov = st.text_input("Provincia", key=f"int_prov_{uid}")
+        mail = st.text_input("Mail", key=f"int_mail_{uid}")
+        tel = st.text_input("Telefono", key=f"int_tel_{uid}")
+    
+    # Bottone di rimozione (solo se non è il primo intestatario)
+    if idx > 0:
+        st.button("🗑️ Rimuovi questo intestatario", key=f"del_int_{uid}", on_click=remove_intestatario, args=(uid,))
     
     intestatari_data.append({
-        "Nome": nome, "Cognome": cognome, "CF": cf, "Data Nascita": data_nascita, "Luogo Nascita": luogo_nascita,
-        "Residenza": f"{via} {civico}, {cap} {paese} ({prov})", "Mail": mail, "Tel": tel, "Diritto": titolo
+        "Nome": nome, "Cognome": cognome, "CF": cf, "Diritto": titolo, #... ecc
     })
     st.divider()
 
-if st.button("➕ Aggiungi un altro intestatario"):
-    st.session_state.num_intestatari += 1
-    st.rerun()
+st.button("➕ Aggiungi un altro intestatario", on_click=add_intestatario)
 
 # --- PROFESSIONISTI ---
 st.subheader("Professionisti")
-st.markdown("**Progettista (Default)**")
-col_p1, col_p2 = st.columns(2)
-with col_p1:
-    prof_nome = st.text_input("Nome e Cognome", value="Gianfranco Andriolo")
-    prof_cf = st.text_input("Codice Fiscale", value="NDRGFR83S17F964E")
-    prof_nascita = st.text_input("Nato il / a", value="17/11/1983 a Noventa Vicentina")
-    prof_tel = st.text_input("Telefono", value="377 9662445")
-with col_p2:
-    prof_pec = st.text_input("PEC", value="andriolo.18135@oamilano.it")
-    prof_mail = st.text_input("Mail", value="studioandriolo@gmail.com")
-    prof_albo = st.text_input("Iscrizione Albo", value="Ordine Architetti Milano, n. 18135")
-    prof_studio = st.text_input("Sede Studio", value="Via Masotto 11, 36025 Noventa Vicentina")
 
-professionisti_data = [{"Qualifica": "Progettista", "Nome": prof_nome, "CF": prof_cf, "Dati": f"Nato: {prof_nascita} | Albo: {prof_albo} | Studio: {prof_studio} | Contatti: {prof_pec}, {prof_mail}, {prof_tel}"}]
+# Funzione per renderizzare il form del professionista (evitiamo di duplicare codice)
+def render_professionista(uid, is_main=False):
+    if is_main:
+        qualifica = "Progettista"
+        st.markdown(f"**Professionista 1 - {qualifica} (Principale)**")
+    else:
+        qualifica = st.selectbox("Qualifica", ["Strutturista", "Termotecnico", "DDLL", "Coordinatore Sicurezza", "Collaudatore"], key=f"prof_qual_{uid}")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        titolo = st.selectbox("Titolo", ["Architetto", "Ingegnere", "Geometra", "Perito", "Altro"], key=f"prof_tit_{uid}")
+        nome = st.text_input("Nome", value="Gianfranco" if is_main else "", key=f"prof_nome_{uid}")
+        cognome = st.text_input("Cognome", value="Andriolo" if is_main else "", key=f"prof_cogn_{uid}")
+        cf = st.text_input("Codice Fiscale", value="NDRGFR83S17F964E" if is_main else "", key=f"prof_cf_{uid}")
+    with col2:
+        luogo_nascita = st.text_input("Luogo di Nascita", value="Noventa Vicentina" if is_main else "", key=f"prof_luogo_{uid}")
+        data_nascita = st.text_input("Data di Nascita (gg/mm/aaaa)", value="17/11/1983" if is_main else "", key=f"prof_data_{uid}")
+        studio = st.text_input("Studio in (Indirizzo completo)", value="Via Masotto 11, 36025 Noventa Vicentina" if is_main else "", key=f"prof_studio_{uid}")
+    with col3:
+        pec = st.text_input("PEC", value="andriolo.18135@oamilano.it" if is_main else "", key=f"prof_pec_{uid}")
+        mail = st.text_input("Mail", value="studioandriolo@gmail.com" if is_main else "", key=f"prof_mail_{uid}")
+        tel = st.text_input("Telefono", value="377 9662445" if is_main else "", key=f"prof_tel_{uid}")
+        albo_coll = st.text_input("Iscrizione all'Albo/Collegio di", value="Milano" if is_main else "", key=f"prof_albo_{uid}")
+        num_albo = st.text_input("N. di Iscrizione", value="18135" if is_main else "", key=f"prof_num_{uid}")
+        
+    if not is_main:
+        st.button("🗑️ Rimuovi professionista", key=f"del_prof_{uid}", on_click=remove_professionista, args=(uid,))
+    
+    st.divider()
+    return {"Qualifica": qualifica, "Nome": f"{titolo} {nome} {cognome}", "CF": cf} # Ritorna il dizionario coi dati
 
-# Professionisti Extra
-for i in range(st.session_state.num_professionisti_extra):
-    st.markdown(f"**Professionista Aggiuntivo {i+1}**")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        q = st.selectbox("Qualifica", ["Strutturista", "Termotecnico", "DDLL", "Coordinatore Sicurezza", "Collaudatore"], key=f"q_{i}")
-    with c2:
-        n = st.text_input("Nome e Cognome", key=f"pn_{i}")
-    with c3:
-        cf_ext = st.text_input("Codice Fiscale", key=f"pcf_{i}")
-    professionisti_data.append({"Qualifica": q, "Nome": n, "CF": cf_ext, "Dati": "..."}) # Da espandere se necessario
+professionisti_data = []
 
-if st.button("➕ Aggiungi altro professionista"):
-    st.session_state.num_professionisti_extra += 1
-    st.rerun()
+# Disegna Professionista Principale (ID fisso 'main')
+prof_main = render_professionista('main', is_main=True)
+professionisti_data.append(prof_main)
+
+# Disegna Professionisti Extra
+for uid in st.session_state.professionisti_ids:
+    prof_extra = render_professionista(uid, is_main=False)
+    professionisti_data.append(prof_extra)
+
+st.button("➕ Aggiungi altro professionista", on_click=add_professionista)
 
 # ==========================================
 # SEZIONE 2: ELEMENTI COGNITIVI
 # ==========================================
 st.header("2. Elementi Cognitivi del Progetto")
 tipo_pratica = st.selectbox("Tipo di pratica edilizia", ["CILA", "SCIA art.22", "SCIA art.23", "PdC"])
-tipo_intervento = st.text_input("Tipo di intervento (es. Manutenzione Straordinaria, Ristrutturazione)")
+tipo_intervento = st.text_input("Tipo di intervento (scrivi una relazione sintetica)")
 rel_sintetica = st.text_area("Relazione Sintetica dell'intervento", height=150)
 elaborati = st.file_uploader("Elaborati grafici (Carica PDF)", type=['pdf'], accept_multiple_files=True)
 
